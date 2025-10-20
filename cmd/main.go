@@ -47,7 +47,7 @@ func main() {
 		}()
 	}
 
-	server := server.NewServer("localhost:8080", Cache)
+	server := server.New("localhost:8080", Cache)
 	slog.Info("HTTP server initialized", "address", "localhost:8080")
 	server.Start()
 }

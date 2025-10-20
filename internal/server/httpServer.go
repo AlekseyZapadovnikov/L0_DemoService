@@ -20,7 +20,7 @@ type Server struct {
 	service OrderGiver
 }
 
-func NewServer(addr string, OrdService OrderGiver) *Server {
+func New(addr string, OrdService OrderGiver) *Server {
 	srv := &Server{
 		router:  http.NewServeMux(),
 		service: OrdService,
