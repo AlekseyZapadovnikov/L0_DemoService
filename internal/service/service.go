@@ -10,8 +10,12 @@ import (
 	"sync"
 	"time"
 
-	"github.com/Asus/L0_DemoServise/internal/entity"
+	"github.com/AlekseyZapadovnikov/L0_DemoService/internal/entity"
 	"github.com/jackc/pgx/v5"
+)
+
+var (
+	ErrOrderNotFound = errors.New("order not found")
 )
 
 type getOrder interface {
@@ -27,10 +31,10 @@ type saver interface {
 type Cache struct {
 	OrderMap   map[string]entity.Order // Хранилище данных
 	orderItems map[string]*Item        // Быстрый доступ к элементам в очереди по UID
-	OrderTaker getOrder				// Интерфейс для получения заказов из хранилища
+	OrderTaker getOrder                // Интерфейс для получения заказов из хранилища
 	prQ        *SafePriorityQueue      // Указатель, чтобы избежать копирования
 	cacheCap   int
-	mu 	sync.RWMutex
+	mu         sync.RWMutex
 }
 
 func NewCache(storage getOrder, cacheCap int) *Cache {
@@ -40,7 +44,7 @@ func NewCache(storage getOrder, cacheCap int) *Cache {
 		OrderTaker: storage,
 		prQ:        NewSafePriorityQueue(cacheCap),
 		cacheCap:   cacheCap,
-		mu:      sync.RWMutex{},
+		mu:         sync.RWMutex{},
 	}
 }
 
@@ -79,11 +83,11 @@ func (s *Cache) GiveOrderByUID(UID string) (entity.Order, error) {
 	ord, err := s.OrderTaker.GetOrderByUID(context.Background(), UID)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return entity.Order{}, fmt.Errorf("order with UID %s not found", UID)
+			return entity.Order{}, fmt.Errorf("%w: order with UID %s not found", ErrOrderNotFound, UID)
 		}
 		return entity.Order{}, fmt.Errorf("error occurred while trying to get order with UID %s: %w", UID, err)
 	}
-	
+
 	s.addToCache(ord)
 	return ord, nil
 }
@@ -123,7 +127,7 @@ func (s *Cache) addToCache(ord entity.Order) {
 func (s *Cache) updateOrderPriority(UID string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	
+
 	item, exists := s.orderItems[UID]
 	if !exists {
 		return
@@ -136,6 +140,6 @@ func (s *Cache) GetPriorityQueue() *SafePriorityQueue {
 	return s.prQ
 }
 
-func (s *Cache) PrinPriorityQueue() string{
+func (s *Cache) PrinPriorityQueue() string {
 	return s.prQ.String()
 }

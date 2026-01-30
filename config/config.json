@@ -4,6 +4,6 @@
         "db_host": "localhost",
         "db_port": "5432"
     },
-    "cache_cap": 1024,
+    "cache_cap": 100,
     "consumer_number": 3
 }

@@ -2,7 +2,8 @@ package service
 
 import (
 	"context"
-	"github.com/Asus/L0_DemoServise/internal/entity"
+
+	"github.com/AlekseyZapadovnikov/L0_DemoService/internal/entity"
 )
 
 type OrderCache interface {

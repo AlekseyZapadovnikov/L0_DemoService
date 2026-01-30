@@ -5,11 +5,11 @@ import (
 	"log/slog"
 	"os"
 
-	"github.com/Asus/L0_DemoServise/config"
-	"github.com/Asus/L0_DemoServise/internal/broker"
-	"github.com/Asus/L0_DemoServise/internal/server"
-	"github.com/Asus/L0_DemoServise/internal/service"
-	"github.com/Asus/L0_DemoServise/internal/storage"
+	"github.com/AlekseyZapadovnikov/L0_DemoService/config"
+	"github.com/AlekseyZapadovnikov/L0_DemoService/internal/broker"
+	"github.com/AlekseyZapadovnikov/L0_DemoService/internal/server"
+	"github.com/AlekseyZapadovnikov/L0_DemoService/internal/service"
+	"github.com/AlekseyZapadovnikov/L0_DemoService/internal/storage"
 )
 
 func main() {
@@ -49,5 +49,8 @@ func main() {
 
 	server := server.New("localhost:8080", Cache)
 	slog.Info("HTTP server initialized", "address", "localhost:8080")
-	server.Start()
+	if err := server.Start(); err != nil {
+		slog.Error("failed to start server", "error", err)
+		os.Exit(1)
+	}
 }

@@ -8,7 +8,7 @@ import (
 	"math/rand"
 	"time"
 
-	"github.com/Asus/L0_DemoServise/internal/entity"
+	"github.com/AlekseyZapadovnikov/L0_DemoService/internal/entity"
 	"github.com/brianvoe/gofakeit/v6"
 	"github.com/segmentio/kafka-go"
 )

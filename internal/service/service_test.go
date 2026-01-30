@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Asus/L0_DemoServise/internal/entity"
+	"github.com/AlekseyZapadovnikov/L0_DemoService/internal/entity"
 	"github.com/jackc/pgx/v5"
 )
 
@@ -17,33 +17,26 @@ type TestData struct {
 	Orders []entity.Order `json:"orders"`
 }
 
-func loadTestData() []entity.Order {
+func loadTestData(t *testing.T) []entity.Order {
+	t.Helper()
+
 	file, err := os.Open("tests/testData.json")
 	if err != nil {
-		panic(err)
+		t.Fatalf("failed to open test data: %v", err)
 	}
 	defer file.Close()
 
 	data, err := io.ReadAll(file)
 	if err != nil {
-		panic(err)
+		t.Fatalf("failed to read test data: %v", err)
 	}
 
 	var testData TestData
 	if err := json.Unmarshal(data, &testData); err != nil {
-		panic(err)
+		t.Fatalf("failed to unmarshal test data: %v", err)
 	}
 
 	return testData.Orders
-}
-
-func giveItemsByOrdersSlice(orders []entity.Order) []*Item {
-	items := make([]*Item, 0, len(orders))
-	for _, ord := range orders {
-		item := makeItem(ord.OrderUID)
-		items = append(items, item)
-	}
-	return items
 }
 
 func giveItemsUIDSlice(items []*Item) []string {
@@ -54,59 +47,70 @@ func giveItemsUIDSlice(items []*Item) []string {
 	return uids
 }
 
-func TestPriorityQueue(T *testing.T) {
-	prq := NewSafePriorityQueue(10)
-	orders := loadTestData()
+func TestPriorityQueue(t *testing.T) {
+	orders := loadTestData(t)
+
+	// Подготовка эталонных данных
 	items := make([]*Item, 0, len(orders))
 	for _, ord := range orders {
-		item := makeItem(ord.OrderUID)
-		items = append(items, item)
-		prq.Push(item)
+		items = append(items, makeItem(ord.OrderUID))
 	}
+
+	// Копия для проверки обратного порядка (LIFO/Priority Logic)
 	revItems := make([]*Item, len(items))
 	copy(revItems, items)
 	slices.Reverse(revItems)
+
 	revItemsUID := giveItemsUIDSlice(revItems)
 	itemsUID := giveItemsUIDSlice(items)
 
-	if prq.Len() != len(orders) {
-		T.Errorf("expected length %d, got %d", len(orders), prq.Len())
-	}
+	// Базовая проверка длины
+	t.Run("Check Length", func(t *testing.T) {
+		prq := NewSafePriorityQueue(10)
+		for _, item := range items {
+			prq.Push(item)
+		}
+		if got := prq.Len(); got != len(orders) {
+			t.Errorf("expected length %d, got %d", len(orders), got)
+		}
+	})
 
 	testCases := []struct {
-		testName         string
-		itemsToPush      []*Item
-		funcToRun        func(prq *SafePriorityQueue, items []*Item)
-		expectedPopOrder []string // порядок UID при мзвлечении
-		checkFunc        func(a, b []string) bool
+		name             string
+		action           func(prq *SafePriorityQueue, items []*Item)
+		expectedPopOrder []string
 	}{
 		{
-			testName:         "обычное добавление по порядку",
-			itemsToPush:      items,
-			funcToRun:        func(prq *SafePriorityQueue, items []*Item) {},
-			expectedPopOrder: revItemsUID, // ItemsUID в обратном порядке
-			checkFunc: func(a, b []string) bool {
-				return slices.Equal(a, b)
-			},
+			name:             "Normal push order",
+			action:           func(prq *SafePriorityQueue, items []*Item) {},
+			expectedPopOrder: revItemsUID,
 		},
 		{
-			testName:    "добавление с обновлением приоритета у одного элемента",
-			itemsToPush: items,
-			funcToRun: func(prq *SafePriorityQueue, items []*Item) {
-				prq.Update(items[3], time.Now()) // обновляем приоритет у первого элемента
+			name: "Push with priority update",
+			action: func(prq *SafePriorityQueue, items []*Item) {
+				// Обновляем приоритет у 4-го элемента (индекс 3)
+				prq.Update(items[3], time.Now())
 			},
-			expectedPopOrder: []string{itemsUID[0]},
-			checkFunc: func(a, b []string) bool {
-				return a[0] == b[0]
-			}},
+			// Ожидаем, что первым выйдет items[3], так как у него самое свежее время
+			expectedPopOrder: []string{itemsUID[3]},
+		},
 	}
+
 	for _, tc := range testCases {
-		T.Run(tc.testName, func(t *testing.T) {
+		t.Run(tc.name, func(t *testing.T) {
 			prq := NewSafePriorityQueue(10)
 
-			for _, item := range tc.itemsToPush {
+			// Пересоздаем items для каждого теста, чтобы не было сайд-эффектов от pointer'ов
+			currentItems := make([]*Item, 0, len(orders))
+			for _, ord := range orders {
+				item := makeItem(ord.OrderUID)
+				currentItems = append(currentItems, item)
 				prq.Push(item)
 			}
+
+			// Выполняем действие теста (например, Update)
+			tc.action(prq, currentItems)
+
 			var popped []string
 			for prq.Len() > 0 {
 				item := prq.Pop()
@@ -115,20 +119,25 @@ func TestPriorityQueue(T *testing.T) {
 				}
 			}
 
-			// Проверяем результат
-			switch tc.testName {
-			case "обычное добавление по порядку":
-				T.Log("PASS")
-			case "добавление с обновлением приоритета у одного элемента":
-				if tc.expectedPopOrder[0] == popped[0] {
-					T.Log("PASS")
-				} else {
-					T.Errorf("expected first popped %s, got %s", tc.expectedPopOrder[0], popped[0])
-				}
+			// Проверяем
+			if len(tc.expectedPopOrder) == 0 {
+				return
+			}
+
+			// Сравниваем только начало списка, если expectedPopOrder короче полного списка
+			limit := len(tc.expectedPopOrder)
+			if len(popped) < limit {
+				t.Fatalf("popped items count %d less than expected to check %d", len(popped), limit)
+			}
+
+			if !slices.Equal(popped[:limit], tc.expectedPopOrder) {
+				t.Errorf("pop order mismatch.\nWant: %v\nGot:  %v", tc.expectedPopOrder, popped[:limit])
 			}
 		})
 	}
 }
+
+// Mocks
 
 type mockStorage struct {
 	mockDB map[string]entity.Order
@@ -159,11 +168,9 @@ func TestCache(t *testing.T) {
 	storage := &mockStorage{mockDB: mockOrders}
 
 	t.Run("Get from empty cache (miss and fill)", func(t *testing.T) {
-		// Создаем новый кэш для каждого теста, чтобы они не влияли друг на друга
 		cache := NewCache(storage, 3)
 
 		order, err := cache.GiveOrderByUID("order-1")
-
 		if err != nil {
 			t.Fatalf("expected no error, but got: %v", err)
 		}
@@ -171,7 +178,6 @@ func TestCache(t *testing.T) {
 			t.Errorf("expected to get order-1, but got: %s", order.OrderUID)
 		}
 
-		// Проверяем, что кэш теперь содержит этот элемент
 		if _, exists := cache.OrderMap["order-1"]; !exists {
 			t.Error("order-1 was not added to the cache after a miss")
 		}
@@ -181,23 +187,28 @@ func TestCache(t *testing.T) {
 	})
 
 	t.Run("Eviction of least recently used item", func(t *testing.T) {
-		// Используем кэш с маленькой емкостью для проверки вытеснения
 		cache := NewCache(storage, 2)
 
-		cache.GiveOrderByUID("order-1")
-		time.Sleep(10 * time.Millisecond)
-		cache.GiveOrderByUID("order-2")
-		time.Sleep(10 * time.Millisecond)
-
-		if len(cache.OrderMap) != 2 {
-			t.Fatalf("expected cache size to be 2 before eviction, but got: %d", len(cache.OrderMap))
+		mustGet := func(uid string) {
+			t.Helper()
+			if _, err := cache.GiveOrderByUID(uid); err != nil {
+				t.Fatalf("failed to prepare cache with %s: %v", uid, err)
+			}
 		}
 
-		cache.GiveOrderByUID("order-3")
+		mustGet("order-1")
+		time.Sleep(10 * time.Millisecond)
+		mustGet("order-2")
+		time.Sleep(10 * time.Millisecond)
 
-		// Проверяем состояние кэша после вытеснения
 		if len(cache.OrderMap) != 2 {
-			t.Errorf("expected cache size to be 2 after eviction, but got: %d", len(cache.OrderMap))
+			t.Fatalf("expected cache size to be 2, got: %d", len(cache.OrderMap))
+		}
+
+		mustGet("order-3")
+
+		if len(cache.OrderMap) != 2 {
+			t.Errorf("expected cache size to be 2 after eviction, got: %d", len(cache.OrderMap))
 		}
 		if _, exists := cache.OrderMap["order-3"]; !exists {
 			t.Error("new item order-3 was not added to cache")
@@ -210,37 +221,40 @@ func TestCache(t *testing.T) {
 		}
 	})
 
-	t.Run("Accessing an item updates its priority and prevents eviction", func(t *testing.T) {
+	t.Run("Accessing an item updates its priority", func(t *testing.T) {
 		cache := NewCache(storage, 2)
 
-		// 1. Добавляем order-1, потом order-2. Порядок старости: 1, 2.
-		cache.GiveOrderByUID("order-1")
+		mustGet := func(uid string) {
+			t.Helper()
+			if _, err := cache.GiveOrderByUID(uid); err != nil {
+				t.Fatalf("failed to prepare cache with %s: %v", uid, err)
+			}
+		}
+
+		mustGet("order-1")
 		time.Sleep(10 * time.Millisecond)
-		cache.GiveOrderByUID("order-2")
+		mustGet("order-2")
 		time.Sleep(10 * time.Millisecond)
 
-		cache.GiveOrderByUID("order-1")
+		mustGet("order-1")
 		time.Sleep(10 * time.Millisecond)
 
-		cache.GiveOrderByUID("order-3")
+		mustGet("order-3")
 
 		if len(cache.OrderMap) != 2 {
 			t.Errorf("expected cache size to be 2, but got: %d", len(cache.OrderMap))
 		}
 		if _, exists := cache.OrderMap["order-1"]; !exists {
-			t.Error("order-1 should have been kept in cache because it was recently accessed")
+			t.Error("order-1 should have been kept in cache (recently accessed)")
 		}
 		if _, exists := cache.OrderMap["order-2"]; exists {
-			t.Error("order-2 should have been evicted as the new least recently used item")
+			t.Error("order-2 should have been evicted")
 		}
 	})
 
 	t.Run("Getting a non-existent item returns an error", func(t *testing.T) {
 		cache := NewCache(storage, 3)
-
-		// Пытаемся получить заказ, которого нет ни в кэше, ни в моке БД
 		_, err := cache.GiveOrderByUID("non-existent-order")
-
 		if err == nil {
 			t.Fatal("expected an error for a non-existent item, but got nil")
 		}

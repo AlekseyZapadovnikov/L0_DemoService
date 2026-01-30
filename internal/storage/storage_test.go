@@ -8,7 +8,7 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/Asus/L0_DemoServise/internal/entity"
+	"github.com/AlekseyZapadovnikov/L0_DemoService/internal/entity"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/pashagolub/pgxmock/v3"
@@ -25,7 +25,6 @@ var cols = []string{
 	"rid", "chrt_id", "item_track_number", "price", "item_name",
 	"sale", "size", "total_price", "nm_id", "brand", "status",
 }
-
 
 // loadTemplateOrder загружает базовый заказ-шаблон из JSON файла.
 func loadTemplateOrder() (entity.Order, error) {
@@ -64,16 +63,15 @@ func orderToRow(order entity.Order, itemIndex int) []any {
 		order.OrderUID, order.TrackNumber, order.Entry, order.Locale, order.InternalSignature, order.CustomerID,
 		order.DeliveryService, order.ShardKey, order.SmID, order.DateCreated, order.OofShard,
 		order.Delivery.Name, order.Delivery.Phone, order.Delivery.Zip, order.Delivery.City, order.Delivery.Address, order.Delivery.Region, order.Delivery.Email,
-		
-		order.Payment.OrderUID, 
-		
+
+		order.Payment.OrderUID,
+
 		order.Payment.RequestID, order.Payment.Currency, order.Payment.Provider, order.Payment.Amount, order.Payment.PaymentDt, order.Payment.Bank,
 		order.Payment.DeliveryCost, order.Payment.GoodsTotal, order.Payment.CustomFee,
 		item.Rid, item.ChrtID, item.TrackNumber, item.Price, item.Name,
 		item.Sale, item.Size, item.TotalPrice, item.NmID, item.Brand, item.Status,
 	}
 }
-
 
 func TestGetOrderByUID(t *testing.T) {
 	mock, err := pgxmock.NewPool()
@@ -245,9 +243,13 @@ func TestGetLastNOrders(t *testing.T) {
 			assertError(t, err, tc.expectedErr)
 
 			if tc.expectedErr == nil {
-				if len(orders) == 0 { orders = nil }
-				if len(tc.expectedOrders) == 0 { tc.expectedOrders = nil }
-				
+				if len(orders) == 0 {
+					orders = nil
+				}
+				if len(tc.expectedOrders) == 0 {
+					tc.expectedOrders = nil
+				}
+
 				if !reflect.DeepEqual(orders, tc.expectedOrders) {
 					assertJSONEqual(t, orders, tc.expectedOrders)
 				}
@@ -259,7 +261,6 @@ func TestGetLastNOrders(t *testing.T) {
 		})
 	}
 }
-
 
 func assertError(t *testing.T, got, want error) {
 	t.Helper()

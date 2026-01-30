@@ -13,10 +13,10 @@ const (
 )
 
 type Config struct {
-	Env      string  `json:"env"`
-	Storage  Storage `json:"storage"`
-	CacheCap int     `json:"cache_cap"`
-	ConsmerNumber int `json:"consumer_number"`
+	Env           string  `json:"env"`
+	Storage       Storage `json:"storage"`
+	CacheCap      int     `json:"cache_cap"`
+	ConsmerNumber int     `json:"consumer_number"`
 }
 
 type Storage struct {

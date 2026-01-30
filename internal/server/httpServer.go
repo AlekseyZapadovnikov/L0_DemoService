@@ -1,13 +1,18 @@
 package server
 
 import (
+	"embed"
 	"encoding/json"
-	"html/template"
+	"errors"
+	"io/fs"
 	"log/slog"
 	"net/http"
-	"strings"
 
-	"github.com/Asus/L0_DemoServise/internal/entity"
+	"github.com/AlekseyZapadovnikov/L0_DemoService/internal/entity"
+	"github.com/AlekseyZapadovnikov/L0_DemoService/internal/service"
+	"github.com/go-chi/chi/v5"
+	"github.com/go-chi/chi/v5/middleware"
+	"github.com/google/uuid"
 )
 
 type OrderGiver interface {
@@ -15,76 +20,80 @@ type OrderGiver interface {
 }
 
 type Server struct {
-	router  *http.ServeMux
+	router  *chi.Mux
 	server  *http.Server
 	service OrderGiver
 }
 
-func New(addr string, OrdService OrderGiver) *Server {
-	srv := &Server{
-		router:  http.NewServeMux(),
-		service: OrdService,
-	}
-	srv.server = &http.Server{
+//go:embed static/*
+var staticFS embed.FS
+
+func New(addr string, service OrderGiver) *Server {
+	router := chi.NewRouter()
+
+	srv := &http.Server{
 		Addr:    addr,
-		Handler: srv,
+		Handler: router,
 	}
-	srv.routes()
-	return srv
+
+	server := &Server{
+		router:  router,
+		server:  srv,
+		service: service,
+	}
+
+	return server
 }
 
-// Start запускает сервер.
 func (s *Server) Start() error {
-	slog.Info("server starting", "address", s.server.Addr)
+	s.routes()
 	return s.server.ListenAndServe()
 }
 
-// Для того чтобы не писать логирование в каждом HandleFunc логируем все тут
-func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	slog.Info("request received", "method", r.Method, "path", r.URL.Path)
-	s.router.ServeHTTP(w, r) // находим нужный хэндлер и вызываем
-}
-
-// эта функция заполняет наш маршрутизатор нужными хендлерами
 func (s *Server) routes() {
-    s.router.HandleFunc("GET /", s.handleHomePage())      
-    s.router.HandleFunc("GET /order/{UID}", s.handleOrderByUID()) 
+	s.router.Use(middleware.RequestID)
+	s.router.Use(HTTPLogger)
+
+	s.router.Get("/order/{UID}", s.handleOrderByUID)
+
+	content, err := fs.Sub(staticFS, "static")
+	if err != nil {
+		panic(err)
+	}
+
+	fileServer := http.FileServer(http.FS(content))
+
+	s.router.Handle("/*", fileServer)
 }
 
+func (s *Server) handleOrderByUID(rw http.ResponseWriter, r *http.Request) {
+	uid := chi.URLParam(r, "UID")
 
-// handleHomePage() просто загружает домашнюю страницу html
-var tmpl = template.Must(template.ParseGlob("internal/server/templates/*.html")) // загрузили все html
+	if _, err := uuid.Parse(uid); err != nil {
+		http.Error(rw, "UID is invalid or missing", http.StatusBadRequest)
+		return
+	}
 
-func (s *Server) handleHomePage() http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		tmpl.ExecuteTemplate(w, "homePage.html", nil)
+	order, err := s.service.GiveOrderByUID(uid)
+	if err != nil {
+		if errors.Is(err, service.ErrOrderNotFound) {
+			http.Error(rw, "order not found", http.StatusNotFound)
+			return
+		}
+		http.Error(rw, "internal server error", http.StatusInternalServerError)
+		return
+	}
+
+	data, err := json.Marshal(&order)
+	if err != nil {
+		slog.Warn("couldn`t marshal json", slog.String("error", err.Error()), slog.String("UID", uid))
+		http.Error(rw, "internal server error", http.StatusInternalServerError)
+		return
+	}
+
+	rw.Header().Set("Content-Type", "application/json")
+	if _, err := rw.Write(data); err != nil {
+		slog.Warn("couldn`t write response", slog.String("error", err.Error()), slog.String("UID", uid))
+		http.Error(rw, "internal server error", http.StatusInternalServerError)
 	}
 }
-
-// выводит данные о заказе в браузер в формате json
-func (s *Server) handleOrderByUID() http.HandlerFunc {
-    return func(w http.ResponseWriter, r *http.Request) {
-        // ожидаем URL вида: /order/<uid>
-        uid := strings.TrimPrefix(r.URL.Path, "/order/")
-        if uid == "" || strings.Contains(uid, "/") {
-            http.NotFound(w, r)
-            return
-        }
-
-        ord, err := s.service.GiveOrderByUID(uid)
-        if err != nil {
-            http.Error(w, "order not found", http.StatusNotFound)
-            return
-        }
-
-        // Возвращаем JSON вместо рендеринга шаблона
-        w.Header().Set("Content-Type", "application/json")
-        if err := json.NewEncoder(w).Encode(ord); err != nil {
-            slog.Error("failed to encode order to JSON", "error", err)
-            http.Error(w, "internal server error", http.StatusInternalServerError)
-        }
-    }
-}
-
-
-

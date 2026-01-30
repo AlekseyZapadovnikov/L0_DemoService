@@ -26,7 +26,7 @@ func NewSafePriorityQueue(cacheCap int) *SafePriorityQueue {
 func (spq *SafePriorityQueue) Push(item *Item) {
 	spq.mu.Lock()
 	defer spq.mu.Unlock()
-	
+
 	heap.Push(&spq.pq, item)
 }
 
@@ -38,7 +38,7 @@ func (spq *SafePriorityQueue) Pop() *Item {
 	if spq.pq.Len() == 0 {
 		return nil // Или вернуть ошибку, в зависимости от вашей логики
 	}
-	
+
 	return heap.Pop(&spq.pq).(*Item)
 }
 
@@ -47,7 +47,7 @@ func (spq *SafePriorityQueue) Pop() *Item {
 func (spq *SafePriorityQueue) Update(item *Item, newPriority time.Time) {
 	spq.mu.Lock()
 	defer spq.mu.Unlock()
-	
+
 	item.Priority = newPriority
 	heap.Fix(&spq.pq, item.Index)
 }
@@ -56,7 +56,7 @@ func (spq *SafePriorityQueue) Update(item *Item, newPriority time.Time) {
 func (spq *SafePriorityQueue) Len() int {
 	spq.mu.Lock()
 	defer spq.mu.Unlock()
-	
+
 	return spq.pq.Len()
 }
 
@@ -67,11 +67,11 @@ func makeItem(UID string) *Item {
 	}
 }
 
-func (sprq *SafePriorityQueue) GetPrq() PriorityQueue{
+func (sprq *SafePriorityQueue) GetPrq() PriorityQueue {
 	return sprq.pq
 }
 
-func (sprq *SafePriorityQueue) LenPrq() int{
+func (sprq *SafePriorityQueue) LenPrq() int {
 	return sprq.pq.Len()
 }
 

@@ -3,7 +3,6 @@
 package service
 
 import (
-	"container/heap"
 	"time"
 )
 
@@ -53,9 +52,9 @@ func (pq *PriorityQueue) Pop() any {
 	return item
 }
 
-// update (не используется, но для полноты картины)
-func (pq *PriorityQueue) update(item *Item, Value string, Priority time.Time) {
-	item.Value = Value
-	item.Priority = Priority
-	heap.Fix(pq, item.Index)
-}
+// update (не используется, но для полноты картины реализован)
+// func (pq *PriorityQueue) update(item *Item, Value string, Priority time.Time) {
+// 	item.Value = Value
+// 	item.Priority = Priority
+// 	heap.Fix(pq, item.Index)
+// }

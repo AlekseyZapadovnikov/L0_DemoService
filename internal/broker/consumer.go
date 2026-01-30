@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 
-	"github.com/Asus/L0_DemoServise/internal/entity"
+	"github.com/AlekseyZapadovnikov/L0_DemoService/internal/entity"
 	"github.com/segmentio/kafka-go"
 )
 
@@ -50,7 +50,7 @@ func (c *KafkaConsumer) ConsumeAndSave(ctx context.Context) error {
 			slog.Error("failed to validate order data", "error", err, "order_uid", order.OrderUID)
 			continue // Пропускаем невалидное сообщение, предварительно логируя его
 		}
-		
+
 		slog.Info("Order processed from Kafka", "order_uid", order.OrderUID)
 
 		// Сохранение заказа

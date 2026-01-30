@@ -57,9 +57,8 @@ docker compose up -d
 ```env
 DB_USER=order_user
 DB_PASSWORD=demo
-DB_NAME=orders_db
-DB_PORT=5432
-
+DB_NAME=order-db
+DB_PORT=5433
 ```
 
 Подставьте реальные значения перед запуском приложения.
@@ -85,9 +84,10 @@ DB_PORT=5432
 |   |-- entity/
 |   |   `-- models.go
 |   |-- server/
-|   |   |-- templates/
-|   |   |   `-- homePage.html
-|   |   `-- httpServer.go
+|   |   |-- static/
+|   |   |   `-- index.html
+|   |   |-- httpServer.go
+|   |   |-- middleware.go
 |   |-- service/
 |   |   |-- tests/
 |   |   |   `-- testData.json

@@ -2,11 +2,11 @@ package storage
 
 import (
 	"context"
+	"errors"
 	"fmt"
-	"log/slog"
 
-	"github.com/Asus/L0_DemoServise/config"
-	"github.com/Asus/L0_DemoServise/internal/entity"
+	"github.com/AlekseyZapadovnikov/L0_DemoService/config"
+	"github.com/AlekseyZapadovnikov/L0_DemoService/internal/entity"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -85,18 +85,26 @@ func (s *Storage) Close() {
 }
 
 // SaveOrder сохраняет заказ в БД в рамках одной транзакции
-func (s *Storage) SaveOrder(ctx context.Context, o entity.Order) error {
+func (s *Storage) SaveOrder(ctx context.Context, o entity.Order) (err error) {
 	tx, err := s.pool.Begin(ctx)
 
 	if err != nil {
 		return fmt.Errorf("error while starting transaction %w", err)
 	}
 
+	// 2. Defer с обработкой Rollback
 	defer func() {
 		if err != nil {
-			tx.Rollback(ctx)
+			// Если была ошибка в логике, пытаемся откатить
+			rbErr := tx.Rollback(ctx)
+
+			// pgx.ErrTxClosed возникает, когда мы пытаемся откатить закомиченную транзакцию
+			// то есть в строчке ниже условие такое - если транзакция не была закомичена и не получилось ролбэкнуть то
+			if rbErr != nil && !errors.Is(rbErr, pgx.ErrTxClosed) {
+				err = errors.Join(err, fmt.Errorf("rollback failed: %w", rbErr))
+			}
 		}
-	}() // если возникла ошибка, во время выполнения транзакции - откат
+	}()
 
 	_, err = tx.Exec(ctx,
 		`INSERT INTO orders
@@ -119,7 +127,6 @@ func (s *Storage) SaveOrder(ctx context.Context, o entity.Order) error {
 		return fmt.Errorf("failed to insert into delivery: %w", err)
 	}
 
-	// Вставка в payment (Exec, одна строка)
 	_, err = tx.Exec(ctx,
 		`INSERT INTO payment (order_uid, request_id, currency, provider, amount,
 		 payment_dt, bank, delivery_cost, goods_total, custom_fee)
@@ -156,11 +163,9 @@ func (s *Storage) SaveOrder(ctx context.Context, o entity.Order) error {
 		}
 	}
 
-	// Всё успешно — коммитим транзакцию
 	if err = tx.Commit(ctx); err != nil {
 		return fmt.Errorf("failed to commit transaction: %w", err)
 	}
-	slog.Info("Order successfully saved to database", "order_uid", o.OrderUID)
 
 	return nil
 }

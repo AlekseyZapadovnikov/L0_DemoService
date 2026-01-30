@@ -1,0 +1,77 @@
+run:
+  timeout: 3m # Лучше дать чуть больше времени, если линтеров много
+  tests: false # Линтим только основной код, тесты пока не душим
+
+linters:
+  enable:
+    # Базовые и стиль
+    - govet
+    - staticcheck
+    - gosimple
+    - unused
+    - gofmt
+    - goimports
+    - revive
+    - misspell
+    - whitespace
+    - lll
+    - gci # Хорошо сортирует импорты
+
+    # Сложность и качество кода
+    - gocyclo
+    - gocognit
+    - funlen # ВАЖНО: следит, чтобы функции не были огромными
+    - dupl
+    - nestif # Чтобы не было 10 вложенных if
+
+    # Ошибки и безопасность
+    - errcheck
+    - errorlint # Проверяет правильную работу с ошибками (As/Is)
+    - gosec
+    - nilerr # Ищет, где вернули nil вместо ошибки
+    - noctx # Проверяет, что в HTTP запросы прокидывается контекст
+
+    # Специфичные для проекта (БД и HTTP) - САМОЕ ВАЖНОЕ
+    - bodyclose # Закрытие body в HTTP
+    - sqlclosecheck # Закрытие rows в SQL
+    - rowserrcheck # Проверка ошибок rows.Err()
+    - durationcheck # Проверка работы с time.Duration
+    - prealloc # Оптимизация аллокаций слайсов
+
+    # Прочие полезные
+    - unparam
+    - nakedret
+    - dogsled
+    - goconst
+    - godot
+    - asasalint
+    - makezero
+    - predeclared
+    - thelper
+
+  disable: # Исправил disables -> disable
+    - wrapcheck # Для стажера слишком душный, правильно, что выключил
+    - gomnd # Часто мешает, если много констант, можно выключить или оставить по желанию
+
+issues:
+  exclude-use-default: false
+  max-issues-per-linter: 0
+  max-same-issues: 0
+
+linters-settings:
+  gofmt:
+    simplify: true
+  gocyclo:
+    min-complexity: 15
+  gocognit:
+    min-complexity: 30
+  funlen:
+    lines: 100
+    statements: 50
+  lll:
+    line-length: 120
+  gci:
+    sections:
+      - standard
+      - default
+      - prefix(github.com/AlekseyZapadovnikov/L0_DemoService) # Подставь свой путь модуля, чтобы твои пакеты были отдельной группой
